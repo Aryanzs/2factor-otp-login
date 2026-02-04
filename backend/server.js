@@ -38,6 +38,76 @@ const API_KEY = process.env.API_KEY;
 const SEND_OTP_URL = process.env.SEND_OTP_URL || 'https://2factor.in/API/R1/';
 const VERIFY_OTP_URL = process.env.VERIFY_OTP_URL || 'https://2factor.in/API/V1';
 const OTP_TEMPLATE = process.env.OTP_TEMPLATE || 'OTP1';
+// WhatsApp API Configuration
+const WHATSAPP_API_URL = 'https://adminapis.backendprod.com/lms_campaign/api/whatsapp/template/09stbyfn12/process';
+
+// =====================================================
+// OTP STORAGE (For WhatsApp - since no auto-verify)
+// =====================================================
+
+// In-memory OTP storage (Use Redis in production)
+const otpStorage = new Map();
+
+// OTP Configuration
+const OTP_EXPIRY_MINUTES = 5;
+
+/**
+ * Generate a random 6-digit OTP
+ * @returns {string} - 6-digit OTP
+ */
+const generateOTP = () => {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+};
+
+/**
+ * Store OTP with expiry
+ * @param {string} phoneNumber - Phone number as key
+ * @param {string} otp - OTP value
+ */
+const storeOTP = (phoneNumber, otp) => {
+    otpStorage.set(phoneNumber, {
+        otp: otp,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (OTP_EXPIRY_MINUTES * 60 * 1000)
+    });
+};
+
+/**
+ * Verify OTP from storage
+ * @param {string} phoneNumber - Phone number
+ * @param {string} otp - OTP to verify
+ * @returns {object} - { valid: boolean, message: string }
+ */
+const verifyStoredOTP = (phoneNumber, otp) => {
+    const stored = otpStorage.get(phoneNumber);
+    
+    if (!stored) {
+        return { valid: false, message: 'No OTP was sent to this number. Please request OTP first.' };
+    }
+    
+    if (Date.now() > stored.expiresAt) {
+        otpStorage.delete(phoneNumber);
+        return { valid: false, message: 'OTP has expired. Please request a new OTP.' };
+    }
+    
+    if (stored.otp !== otp) {
+        return { valid: false, message: 'Invalid OTP. Please check and try again.' };
+    }
+    
+    // OTP matched - remove from storage
+    otpStorage.delete(phoneNumber);
+    return { valid: true, message: 'OTP verified successfully!' };
+};
+
+// Clean up expired OTPs every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [phone, data] of otpStorage.entries()) {
+        if (now > data.expiresAt) {
+            otpStorage.delete(phone);
+        }
+    }
+}, 5 * 60 * 1000);
 
 // =====================================================
 // HELPER FUNCTIONS
@@ -395,6 +465,243 @@ app.post('/api/resend-otp', async (req, res) => {
 });
 
 // =====================================================
+// WHATSAPP OTP ENDPOINTS
+// =====================================================
+
+/**
+ * Send OTP via WhatsApp
+ * POST /api/whatsapp/send-otp
+ * 
+ * Request Body:
+ * {
+ *   "phoneNumber": "7021312529"
+ * }
+ */
+app.post('/api/whatsapp/send-otp', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        // Validate request body
+        if (!phoneNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone number is required'
+            });
+        }
+
+        // Format and validate phone number
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+
+        if (!validatePhoneNumber(formattedPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid phone number. Please enter a valid 10-digit Indian mobile number.'
+            });
+        }
+
+        // Generate OTP
+        const otp = generateOTP();
+        
+        // Store OTP for later verification
+        storeOTP(formattedPhone, otp);
+
+        console.log(`\n📱 Sending WhatsApp OTP to: ${formattedPhone}`);
+        console.log(`   Generated OTP: ${otp}`);
+
+        // Prepare request data for WhatsApp API
+        const requestData = {
+            receiver: `+91${formattedPhone}`,
+            values: {
+                "1": otp
+            }
+        };
+
+        console.log('📤 Calling WhatsApp API...');
+
+        // Make API call to WhatsApp
+        const response = await axios.post(WHATSAPP_API_URL, requestData, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('📥 WhatsApp API Response:', response.data);
+
+        // Check if message was sent successfully
+        // Adjust this based on actual API response structure
+        if (response.data && (response.data.success || response.status === 200)) {
+            return res.json({
+                success: true,
+                message: 'OTP sent successfully via WhatsApp! Please check your WhatsApp.',
+                phoneNumber: formattedPhone
+            });
+        } else {
+            // Remove stored OTP if sending failed
+            otpStorage.delete(formattedPhone);
+            return res.status(400).json({
+                success: false,
+                message: response.data?.message || 'Failed to send WhatsApp OTP. Please try again.'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ WhatsApp Send Error:', error.message);
+        
+        // Remove stored OTP if sending failed
+        const formattedPhone = formatPhoneNumber(req.body.phoneNumber || '');
+        otpStorage.delete(formattedPhone);
+
+        if (error.response) {
+            console.error('WhatsApp API Error:', error.response.data);
+            return res.status(error.response.status).json({
+                success: false,
+                message: error.response.data?.message || 'Failed to send WhatsApp OTP.'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to send WhatsApp OTP. Please try again later.'
+        });
+    }
+});
+
+/**
+ * Verify WhatsApp OTP
+ * POST /api/whatsapp/verify-otp
+ * 
+ * Request Body:
+ * {
+ *   "phoneNumber": "7021312529",
+ *   "otp": "123456"
+ * }
+ */
+app.post('/api/whatsapp/verify-otp', async (req, res) => {
+    try {
+        const { phoneNumber, otp } = req.body;
+
+        // Validate request body
+        if (!phoneNumber || !otp) {
+            return res.status(400).json({
+                success: false,
+                verified: false,
+                message: 'Phone number and OTP are required'
+            });
+        }
+
+        // Format phone number
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+
+        // Validate OTP format
+        const otpRegex = /^\d{4,6}$/;
+        if (!otpRegex.test(otp)) {
+            return res.status(400).json({
+                success: false,
+                verified: false,
+                message: 'Invalid OTP format. Please enter a valid OTP.'
+            });
+        }
+
+        console.log(`\n🔐 Verifying WhatsApp OTP for: ${formattedPhone}`);
+        console.log(`   OTP entered: ${otp}`);
+
+        // Verify OTP from storage
+        const verificationResult = verifyStoredOTP(formattedPhone, otp);
+
+        if (verificationResult.valid) {
+            console.log('✅ OTP Verified Successfully!');
+            return res.json({
+                success: true,
+                verified: true,
+                message: 'OTP verified successfully! Logging you in...',
+                phoneNumber: formattedPhone
+            });
+        } else {
+            console.log('❌ OTP Verification Failed:', verificationResult.message);
+            return res.status(400).json({
+                success: false,
+                verified: false,
+                message: verificationResult.message
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ WhatsApp Verify Error:', error.message);
+        return res.status(500).json({
+            success: false,
+            verified: false,
+            message: 'Internal server error. Please try again later.'
+        });
+    }
+});
+
+/**
+ * Resend OTP via WhatsApp
+ * POST /api/whatsapp/resend-otp
+ */
+app.post('/api/whatsapp/resend-otp', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        if (!phoneNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone number is required'
+            });
+        }
+
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+
+        if (!validatePhoneNumber(formattedPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid phone number.'
+            });
+        }
+
+        // Generate new OTP
+        const otp = generateOTP();
+        storeOTP(formattedPhone, otp);
+
+        console.log(`\n🔄 Resending WhatsApp OTP to: ${formattedPhone}`);
+
+        const requestData = {
+            receiver: `+91${formattedPhone}`,
+            values: {
+                "1": otp
+            }
+        };
+
+        const response = await axios.post(WHATSAPP_API_URL, requestData, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.data && (response.data.success || response.status === 200)) {
+            return res.json({
+                success: true,
+                message: 'New OTP sent via WhatsApp!',
+                phoneNumber: formattedPhone
+            });
+        } else {
+            otpStorage.delete(formattedPhone);
+            return res.status(400).json({
+                success: false,
+                message: 'Failed to resend WhatsApp OTP.'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ WhatsApp Resend Error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to resend WhatsApp OTP.'
+        });
+    }
+});
+
+// =====================================================
 // 404 HANDLER
 // =====================================================
 
@@ -433,4 +740,11 @@ app.listen(PORT, () => {
     console.log(`   POST /api/verify-otp  - Verify OTP entered by user`);
     console.log(`   POST /api/resend-otp  - Resend OTP to phone number`);
     console.log('=====================================================\n');
+     console.log('-----------------------------------------------------');
+    console.log('📱 WhatsApp OTP Endpoints:');
+    console.log(`   POST /api/whatsapp/send-otp    - Send OTP via WhatsApp`);
+    console.log(`   POST /api/whatsapp/verify-otp  - Verify WhatsApp OTP`);
+    console.log(`   POST /api/whatsapp/resend-otp  - Resend WhatsApp OTP`);
+    console.log('=====================================================\n');
+
 });

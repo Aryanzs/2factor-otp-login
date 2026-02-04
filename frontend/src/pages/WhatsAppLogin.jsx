@@ -1,12 +1,12 @@
 // =====================================================
-// Login Page Component
-// Premium OTP Authentication UI
+// WhatsApp Login Page Component
+// Premium WhatsApp OTP Authentication UI
 // =====================================================
 
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import './Login.css';
+import './WhatsAppLogin.css';
 
 // Country codes data
 const countryCodes = [
@@ -18,10 +18,10 @@ const countryCodes = [
   { code: '+61', country: 'AU', flag: '🇦🇺', name: 'Australia' },
 ];
 
-// API Base URL
-const API_URL = 'http://localhost:5000/api';
+// API Base URL for WhatsApp
+const API_URL = 'http://localhost:5000/api/whatsapp';
 
-function Login({ onLoginSuccess }) {
+function WhatsAppLogin({ onLoginSuccess }) {
   const navigate = useNavigate();
   
   // States
@@ -29,7 +29,7 @@ function Login({ onLoginSuccess }) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(countryCodes[0]);
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -98,7 +98,7 @@ function Login({ onLoginSuccess }) {
     setError('');
 
     // Auto-focus next input
-    if (value && index < 5) {
+    if (value && index < 3) {
       otpRefs.current[index + 1]?.focus();
     }
   };
@@ -106,17 +106,17 @@ function Login({ onLoginSuccess }) {
   // Handle OTP paste
   const handleOtpPaste = (e) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
     
     if (pastedData.length > 0) {
       const newOtp = [...otp];
-      for (let i = 0; i < pastedData.length && i < 6; i++) {
+      for (let i = 0; i < pastedData.length && i < 4; i++) {
         newOtp[i] = pastedData[i];
       }
       setOtp(newOtp);
       
       // Focus the next empty input or the last one
-      const nextIndex = Math.min(pastedData.length, 5);
+      const nextIndex = Math.min(pastedData.length, 3);
       otpRefs.current[nextIndex]?.focus();
     }
   };
@@ -128,7 +128,7 @@ function Login({ onLoginSuccess }) {
     }
   };
 
-  // Send OTP
+  // Send OTP via WhatsApp
   const handleSendOtp = async (e) => {
     e.preventDefault();
     
@@ -153,7 +153,7 @@ function Login({ onLoginSuccess }) {
       });
 
       if (response.data.success) {
-        setSuccess('OTP sent successfully!');
+        setSuccess('OTP sent to your WhatsApp!');
         setStep('otp');
         setResendTimer(30);
         setTimeout(() => setSuccess(''), 3000);
@@ -172,8 +172,8 @@ function Login({ onLoginSuccess }) {
     
     const otpValue = otp.join('');
     
-    if (otpValue.length !== 6) {
-      setError('Please enter the complete 6-digit OTP');
+    if (otpValue.length !== 4) {
+      setError('Please enter the complete 4-digit OTP');
       return;
     }
 
@@ -189,6 +189,9 @@ function Login({ onLoginSuccess }) {
       if (response.data.success && response.data.verified) {
         setSuccess('Login successful! Redirecting...');
         
+        // Store auth method
+        localStorage.setItem('authMethod', 'whatsapp');
+        
         // Call parent success handler
         setTimeout(() => {
           onLoginSuccess(phoneNumber);
@@ -199,7 +202,7 @@ function Login({ onLoginSuccess }) {
       console.error('Verify OTP Error:', err);
       setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
       // Clear OTP on error
-      setOtp(['', '', '', '', '', '']);
+      setOtp(['', '', '', '']);
       otpRefs.current[0]?.focus();
     } finally {
       setLoading(false);
@@ -219,8 +222,8 @@ function Login({ onLoginSuccess }) {
       });
 
       if (response.data.success) {
-        setSuccess('New OTP sent!');
-        setOtp(['', '', '', '', '', '']);
+        setSuccess('New OTP sent to WhatsApp!');
+        setOtp(['', '', '', '']);
         setResendTimer(30);
         otpRefs.current[0]?.focus();
         setTimeout(() => setSuccess(''), 3000);
@@ -235,43 +238,46 @@ function Login({ onLoginSuccess }) {
   // Go back to phone step
   const handleBack = () => {
     setStep('phone');
-    setOtp(['', '', '', '', '', '']);
+    setOtp(['', '', '', '']);
     setError('');
     setSuccess('');
   };
 
+  // Go back to SMS login
+  const handleBackToSMS = () => {
+    navigate('/');
+  };
+
   return (
-    <div className="login-page page-enter">
-      <div className="login-container">
+    <div className="whatsapp-login-page page-enter">
+      <div className="whatsapp-login-container">
         {/* Logo & Header */}
-        <div className="login-header">
-          <div className="logo">
-            <div className="logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <div className="whatsapp-login-header">
+          <div className="whatsapp-logo">
+            <div className="whatsapp-logo-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
               </svg>
             </div>
-            <span className="logo-text">SecureAuth</span>
+            <span className="whatsapp-logo-text">WhatsApp Login</span>
           </div>
           
-          <h1 className="login-title">
-            {step === 'phone' ? 'Welcome back' : 'Verify your phone'}
+          <h1 className="whatsapp-login-title">
+            {step === 'phone' ? 'Login with WhatsApp' : 'Enter verification code'}
           </h1>
-          <p className="login-subtitle">
+          <p className="whatsapp-login-subtitle">
             {step === 'phone' 
-              ? 'Enter your phone number to continue' 
-              : `We've sent a code to ${selectedCountry.code} ${phoneNumber.replace(/(\d{5})(\d{5})/, '$1 $2')}`
+              ? 'We\'ll send you a verification code on WhatsApp' 
+              : `Check your WhatsApp for OTP sent to ${selectedCountry.code} ${phoneNumber.replace(/(\d{5})(\d{5})/, '$1 $2')}`
             }
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="login-card">
+        <div className="whatsapp-login-card">
           {/* Messages */}
           {error && (
-            <div className="message message-error">
+            <div className="wa-message wa-message-error">
               <svg viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
               </svg>
@@ -280,7 +286,7 @@ function Login({ onLoginSuccess }) {
           )}
           
           {success && (
-            <div className="message message-success">
+            <div className="wa-message wa-message-success">
               <svg viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
               </svg>
@@ -290,36 +296,36 @@ function Login({ onLoginSuccess }) {
 
           {/* Phone Number Step */}
           {step === 'phone' && (
-            <form onSubmit={handleSendOtp} className="login-form">
-              <div className="form-group">
-                <label className="form-label">Phone Number</label>
-                <div className="phone-input-wrapper">
+            <form onSubmit={handleSendOtp} className="whatsapp-login-form">
+              <div className="wa-form-group">
+                <label className="wa-form-label">WhatsApp Number</label>
+                <div className="wa-phone-input-wrapper">
                   {/* Country Code Dropdown */}
-                  <div className="country-selector" ref={dropdownRef}>
+                  <div className="wa-country-selector" ref={dropdownRef}>
                     <button
                       type="button"
-                      className="country-button"
+                      className="wa-country-button"
                       onClick={() => setShowCountryDropdown(!showCountryDropdown)}
                     >
-                      <span className="country-flag">{selectedCountry.flag}</span>
-                      <span className="country-code">{selectedCountry.code}</span>
-                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                      <span className="wa-country-flag">{selectedCountry.flag}</span>
+                      <span className="wa-country-code">{selectedCountry.code}</span>
+                      <svg className="wa-dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"/>
                       </svg>
                     </button>
                     
                     {showCountryDropdown && (
-                      <div className="country-dropdown">
+                      <div className="wa-country-dropdown">
                         {countryCodes.map((country) => (
                           <button
                             key={country.code}
                             type="button"
-                            className={`country-option ${selectedCountry.code === country.code ? 'active' : ''}`}
+                            className={`wa-country-option ${selectedCountry.code === country.code ? 'active' : ''}`}
                             onClick={() => handleCountrySelect(country)}
                           >
-                            <span className="country-flag">{country.flag}</span>
-                            <span className="country-name">{country.name}</span>
-                            <span className="country-code">{country.code}</span>
+                            <span className="wa-country-flag">{country.flag}</span>
+                            <span className="wa-country-name">{country.name}</span>
+                            <span className="wa-country-code">{country.code}</span>
                           </button>
                         ))}
                       </div>
@@ -330,30 +336,35 @@ function Login({ onLoginSuccess }) {
                   <input
                     ref={phoneInputRef}
                     type="tel"
-                    className="phone-input"
-                    placeholder="Enter phone number"
+                    className="wa-phone-input"
+                    placeholder="Enter WhatsApp number"
                     value={phoneNumber}
                     onChange={handlePhoneChange}
                     disabled={loading}
                     autoComplete="tel"
                   />
                 </div>
-                <span className="form-hint">We'll send you a verification code</span>
+                <span className="wa-form-hint">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                  OTP will be sent to this WhatsApp number
+                </span>
               </div>
 
               <button
                 type="submit"
-                className="btn btn-primary"
+                className="wa-btn wa-btn-primary"
                 disabled={loading || phoneNumber.length !== 10}
               >
                 {loading ? (
                   <>
-                    <span className="btn-spinner"></span>
+                    <span className="wa-btn-spinner"></span>
                     Sending OTP...
                   </>
                 ) : (
                   <>
-                    Continue
+                    Send OTP
                     <svg viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
                     </svg>
@@ -365,10 +376,10 @@ function Login({ onLoginSuccess }) {
 
           {/* OTP Verification Step */}
           {step === 'otp' && (
-            <form onSubmit={handleVerifyOtp} className="login-form">
-              <div className="form-group">
-                <label className="form-label">Verification Code</label>
-                <div className="otp-input-wrapper">
+            <form onSubmit={handleVerifyOtp} className="whatsapp-login-form">
+              <div className="wa-form-group">
+                <label className="wa-form-label">Verification Code</label>
+                <div className="wa-otp-input-wrapper">
                   {otp.map((digit, index) => (
                     <input
                       key={index}
@@ -376,7 +387,7 @@ function Login({ onLoginSuccess }) {
                       type="text"
                       inputMode="numeric"
                       maxLength={1}
-                      className={`otp-input ${digit ? 'filled' : ''}`}
+                      className={`wa-otp-input ${digit ? 'filled' : ''}`}
                       value={digit}
                       onChange={(e) => handleOtpChange(index, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(index, e)}
@@ -388,15 +399,15 @@ function Login({ onLoginSuccess }) {
                 </div>
                 
                 {/* Resend OTP */}
-                <div className="resend-wrapper">
+                <div className="wa-resend-wrapper">
                   {resendTimer > 0 ? (
-                    <span className="resend-timer">
+                    <span className="wa-resend-timer">
                       Resend code in <strong>{resendTimer}s</strong>
                     </span>
                   ) : (
                     <button
                       type="button"
-                      className="resend-button"
+                      className="wa-resend-button"
                       onClick={handleResendOtp}
                       disabled={loading}
                     >
@@ -406,10 +417,10 @@ function Login({ onLoginSuccess }) {
                 </div>
               </div>
 
-              <div className="form-actions">
+              <div className="wa-form-actions">
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="wa-btn wa-btn-secondary"
                   onClick={handleBack}
                   disabled={loading}
                 >
@@ -421,12 +432,12 @@ function Login({ onLoginSuccess }) {
                 
                 <button
                   type="submit"
-                  className="btn btn-primary"
-                  disabled={loading || otp.join('').length !== 6}
+                  className="wa-btn wa-btn-primary"
+                  disabled={loading || otp.join('').length !== 4}
                 >
                   {loading ? (
                     <>
-                      <span className="btn-spinner"></span>
+                      <span className="wa-btn-spinner"></span>
                       Verifying...
                     </>
                   ) : (
@@ -442,36 +453,32 @@ function Login({ onLoginSuccess }) {
             </form>
           )}
         </div>
-              {/* Add this AFTER the login-card closing div but BEFORE login-footer */}
 
-      {/* WhatsApp Login Option */}
-      <div className="alt-login-section">
-        <div className="alt-login-divider">
-          <span>or</span>
+        {/* Back to SMS Login */}
+        <div className="wa-alt-login">
+          <button 
+            type="button" 
+            className="wa-back-to-sms"
+            onClick={handleBackToSMS}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"/>
+            </svg>
+            Login with SMS instead
+          </button>
         </div>
-        <button 
-          type="button" 
-          className="btn-whatsapp"
-          onClick={() => navigate('/login/whatsapp')}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-          </svg>
-          Continue with WhatsApp
-        </button>
-      </div>
 
         {/* Footer */}
-        <div className="login-footer">
+        <div className="whatsapp-login-footer">
           <p>By continuing, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></p>
         </div>
       </div>
 
       {/* Decorative Elements */}
-      <div className="decorative-orb orb-1"></div>
-      <div className="decorative-orb orb-2"></div>
+      <div className="wa-decorative-orb wa-orb-1"></div>
+      <div className="wa-decorative-orb wa-orb-2"></div>
     </div>
   );
 }
 
-export default Login;
+export default WhatsAppLogin;

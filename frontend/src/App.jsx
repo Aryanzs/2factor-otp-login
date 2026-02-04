@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import WhatsAppLogin from './pages/WhatsAppLogin';
 import './App.css';
 
 function App() {
@@ -71,6 +72,17 @@ function App() {
                 <Navigate to="/dashboard" replace />
               ) : (
                 <Login onLoginSuccess={handleLoginSuccess} />
+              )
+            } 
+          />
+          {/* WhatsApp Login Route  */}
+          <Route 
+            path="/login/whatsapp" 
+            element={
+              isAuthenticated ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <WhatsAppLogin onLoginSuccess={handleLoginSuccess} />
               )
             } 
           />
