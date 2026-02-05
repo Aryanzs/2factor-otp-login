@@ -4,6 +4,7 @@
 // =====================================================
 
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';  
 import './Dashboard.css';
 
 function Dashboard({ userPhone, onLogout }) {
@@ -39,6 +40,38 @@ function Dashboard({ userPhone, onLogout }) {
       day: 'numeric'
     });
   };
+
+  
+// Load WhatsApp Widget Script
+useEffect(() => {
+  // Check if script already exists
+  const existingScript = document.querySelector('script[widget-id="91ea2564-5680-4723-9f77-7491cf8c613e"]');
+  
+  if (!existingScript) {
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://wa-widget.pointofconnect.com/widget.js';
+    script.setAttribute('widget-id', '91ea2564-5680-4723-9f77-7491cf8c613e');
+    script.async = true;
+    
+    document.body.appendChild(script);
+    
+  }
+
+  // Cleanup function - remove script when component unmounts
+  return () => {
+    const scriptToRemove = document.querySelector('script[widget-id="91ea2564-5680-4723-9f77-7491cf8c613e"]');
+    if (scriptToRemove) {
+      scriptToRemove.remove();
+    }
+    
+    // Also remove the widget iframe/div if it exists
+    const widgetElement = document.querySelector('[class*="wa-widget"]');
+    if (widgetElement) {
+      widgetElement.remove();
+    }
+  };
+}, []); // Empty dependency array = runs once on mount
 
   return (
     <div className="dashboard-page page-enter">
