@@ -86,6 +86,17 @@ function App() {
               )
             } 
           />
+          {/* Meta WhatsApp Login Route */}
+            <Route 
+              path="/login/whatsapp-meta" 
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/dashboard" replace />
+                ) : (
+                  <WhatsAppLogin onLoginSuccess={handleLoginSuccess} apiType="whatsapp-meta" />
+                )
+              } 
+            />
           
           {/* Dashboard Route (Protected) */}
           <Route 

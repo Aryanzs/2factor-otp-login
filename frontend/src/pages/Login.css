@@ -604,3 +604,15 @@
 .btn-whatsapp:active {
   transform: translateY(0);
 }
+
+/* Meta WhatsApp Button - Slightly different shade */
+.btn-whatsapp-meta {
+  margin-top: var(--space-sm);
+  background: linear-gradient(135deg, #128C7E, #075E54);
+  box-shadow: 0 4px 16px rgba(18, 140, 126, 0.3);
+}
+
+.btn-whatsapp-meta:hover {
+  background: linear-gradient(135deg, #0d7d71, #064d46);
+  box-shadow: 0 6px 24px rgba(18, 140, 126, 0.4);
+}

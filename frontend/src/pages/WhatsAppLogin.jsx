@@ -19,9 +19,13 @@ const countryCodes = [
 ];
 
 // API Base URL for WhatsApp
-const API_URL = 'http://localhost:5000/api/whatsapp';
+const API_URLS = {
+  'whatsapp': 'http://localhost:5000/api/whatsapp',
+  'whatsapp-meta': 'http://localhost:5000/api/whatsapp-meta'
+};
+function WhatsAppLogin({ onLoginSuccess, apiType = 'whatsapp' }) {
+  const API_URL = API_URLS[apiType] || API_URLS['whatsapp'];
 
-function WhatsAppLogin({ onLoginSuccess }) {
   const navigate = useNavigate();
   
   // States
@@ -190,8 +194,7 @@ function WhatsAppLogin({ onLoginSuccess }) {
         setSuccess('Login successful! Redirecting...');
         
         // Store auth method
-        localStorage.setItem('authMethod', 'whatsapp');
-        
+          localStorage.setItem('authMethod', apiType);        
         // Call parent success handler
         setTimeout(() => {
           onLoginSuccess(phoneNumber);
@@ -262,9 +265,11 @@ function WhatsAppLogin({ onLoginSuccess }) {
             <span className="whatsapp-logo-text">WhatsApp Login</span>
           </div>
           
-          <h1 className="whatsapp-login-title">
-            {step === 'phone' ? 'Login with WhatsApp' : 'Enter verification code'}
-          </h1>
+        <h1 className="whatsapp-login-title">
+          {step === 'phone' 
+            ? `Login with ${apiType === 'whatsapp-meta' ? 'WhatsApp (Meta)' : 'WhatsApp'}` 
+            : 'Enter verification code'}
+        </h1>
           <p className="whatsapp-login-subtitle">
             {step === 'phone' 
               ? 'We\'ll send you a verification code on WhatsApp' 

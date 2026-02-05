@@ -40,6 +40,9 @@ const VERIFY_OTP_URL = process.env.VERIFY_OTP_URL || 'https://2factor.in/API/V1'
 const OTP_TEMPLATE = process.env.OTP_TEMPLATE || 'OTP1';
 // WhatsApp API Configuration
 const WHATSAPP_API_URL = 'https://adminapis.backendprod.com/lms_campaign/api/whatsapp/template/09stbyfn12/process';
+// Meta WhatsApp API Configuration (Old Simple WhatsApp)
+const META_WHATSAPP_API_URL = process.env.META_WHATSAPP_API_URL;
+const META_WHATSAPP_API_KEY = process.env.META_WHATSAPP_API_KEY;
 
 // =====================================================
 // OTP STORAGE (For WhatsApp - since no auto-verify)
@@ -52,8 +55,8 @@ const otpStorage = new Map();
 const OTP_EXPIRY_MINUTES = 5;
 
 /**
- * Generate a random 6-digit OTP
- * @returns {string} - 6-digit OTP
+ * Generate a random 4-digit OTP
+ * @returns {string} - 4-digit OTP
  */
 const generateOTP = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
@@ -275,7 +278,7 @@ app.post('/api/send-otp', async (req, res) => {
  * Request Body:
  * {
  *   "phoneNumber": "7021312529",
- *   "otp": "123456"
+ *   "otp": "1234"
  * }
  * 
  * Response:
@@ -702,6 +705,308 @@ app.post('/api/whatsapp/resend-otp', async (req, res) => {
 });
 
 // =====================================================
+// META WHATSAPP OTP ENDPOINTS (Old Simple WhatsApp)
+// =====================================================
+
+/**
+ * Send OTP via Meta WhatsApp
+ * POST /api/whatsapp-meta/send-otp
+ * 
+ * Request Body:
+ * {
+ *   "phoneNumber": "7021312529"
+ * }
+ */
+app.post('/api/whatsapp-meta/send-otp', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        // Validate request body
+        if (!phoneNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone number is required'
+            });
+        }
+
+        // Format and validate phone number
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+
+        if (!validatePhoneNumber(formattedPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid phone number. Please enter a valid 10-digit Indian mobile number.'
+            });
+        }
+
+        // Generate 4-digit OTP
+        const otp = generateOTP();
+        
+        // Store OTP for later verification (reusing existing storage)
+        storeOTP(formattedPhone, otp);
+
+        console.log(`\n📱 Sending Meta WhatsApp OTP to: ${formattedPhone}`);
+        console.log(`   Generated OTP: ${otp}`);
+
+        // Prepare request data for Meta WhatsApp API
+        const requestData = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: formattedPhone,  // Without country code, API handles it
+            type: "template",
+            template: {
+                name: "otp_template1",
+                language: {
+                    code: "en"
+                },
+                components: [
+                    {
+                        type: "body",
+                        parameters: [
+                            {
+                                type: "text",
+                                text: otp
+                            }
+                        ]
+                    },
+                    {
+                        type: "button",
+                        sub_type: "url",
+                        index: "0",
+                        parameters: [
+                            {
+                                type: "payload",
+                                payload: otp
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+
+        console.log('📤 Calling Meta WhatsApp API...');
+
+        // Make API call to Meta WhatsApp
+        const response = await axios.post(META_WHATSAPP_API_URL, requestData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': META_WHATSAPP_API_KEY
+            }
+        });
+
+        console.log('📥 Meta WhatsApp API Response:', response.data);
+
+        // Check if message was sent successfully
+        // Response has "message_status": "accepted" when successful
+        if (response.data && response.data.messages && response.data.messages[0]?.message_status === 'accepted') {
+            return res.json({
+                success: true,
+                message: 'OTP sent successfully via WhatsApp! Please check your WhatsApp.',
+                phoneNumber: formattedPhone
+            });
+        } else if (response.status === 200) {
+            // Sometimes 200 OK is enough
+            return res.json({
+                success: true,
+                message: 'OTP sent successfully via WhatsApp! Please check your WhatsApp.',
+                phoneNumber: formattedPhone
+            });
+        } else {
+            // Remove stored OTP if sending failed
+            otpStorage.delete(formattedPhone);
+            return res.status(400).json({
+                success: false,
+                message: response.data?.message || 'Failed to send WhatsApp OTP. Please try again.'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Meta WhatsApp Send Error:', error.message);
+        
+        // Remove stored OTP if sending failed
+        const formattedPhone = formatPhoneNumber(req.body.phoneNumber || '');
+        otpStorage.delete(formattedPhone);
+
+        if (error.response) {
+            console.error('Meta WhatsApp API Error:', error.response.data);
+            return res.status(error.response.status).json({
+                success: false,
+                message: error.response.data?.message || 'Failed to send WhatsApp OTP.'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to send WhatsApp OTP. Please try again later.'
+        });
+    }
+});
+
+/**
+ * Verify Meta WhatsApp OTP
+ * POST /api/whatsapp-meta/verify-otp
+ * 
+ * Request Body:
+ * {
+ *   "phoneNumber": "7021312529",
+ *   "otp": "1234"
+ * }
+ */
+app.post('/api/whatsapp-meta/verify-otp', async (req, res) => {
+    try {
+        const { phoneNumber, otp } = req.body;
+
+        // Validate request body
+        if (!phoneNumber || !otp) {
+            return res.status(400).json({
+                success: false,
+                verified: false,
+                message: 'Phone number and OTP are required'
+            });
+        }
+
+        // Format phone number
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+
+        // Validate OTP format (4 digits)
+        const otpRegex = /^\d{4}$/;
+        if (!otpRegex.test(otp)) {
+            return res.status(400).json({
+                success: false,
+                verified: false,
+                message: 'Invalid OTP format. Please enter a valid 4-digit OTP.'
+            });
+        }
+
+        console.log(`\n🔐 Verifying Meta WhatsApp OTP for: ${formattedPhone}`);
+        console.log(`   OTP entered: ${otp}`);
+
+        // Verify OTP from storage (reusing existing verification)
+        const verificationResult = verifyStoredOTP(formattedPhone, otp);
+
+        if (verificationResult.valid) {
+            console.log('✅ OTP Verified Successfully!');
+            return res.json({
+                success: true,
+                verified: true,
+                message: 'OTP verified successfully! Logging you in...',
+                phoneNumber: formattedPhone
+            });
+        } else {
+            console.log('❌ OTP Verification Failed:', verificationResult.message);
+            return res.status(400).json({
+                success: false,
+                verified: false,
+                message: verificationResult.message
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Meta WhatsApp Verify Error:', error.message);
+        return res.status(500).json({
+            success: false,
+            verified: false,
+            message: 'Internal server error. Please try again later.'
+        });
+    }
+});
+
+/**
+ * Resend OTP via Meta WhatsApp
+ * POST /api/whatsapp-meta/resend-otp
+ */
+app.post('/api/whatsapp-meta/resend-otp', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        if (!phoneNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone number is required'
+            });
+        }
+
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+
+        if (!validatePhoneNumber(formattedPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid phone number.'
+            });
+        }
+
+        // Generate new OTP
+        const otp = generateOTP();
+        storeOTP(formattedPhone, otp);
+
+        console.log(`\n🔄 Resending Meta WhatsApp OTP to: ${formattedPhone}`);
+
+        const requestData = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: formattedPhone,
+            type: "template",
+            template: {
+                name: "otp_template1",
+                language: {
+                    code: "en"
+                },
+                components: [
+                    {
+                        type: "body",
+                        parameters: [
+                            {
+                                type: "text",
+                                text: otp
+                            }
+                        ]
+                    },
+                    {
+                        type: "button",
+                        sub_type: "url",
+                        index: "0",
+                        parameters: [
+                            {
+                                type: "payload",
+                                payload: otp
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+
+        const response = await axios.post(META_WHATSAPP_API_URL, requestData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': META_WHATSAPP_API_KEY
+            }
+        });
+
+        if (response.status === 200) {
+            return res.json({
+                success: true,
+                message: 'New OTP sent via WhatsApp!',
+                phoneNumber: formattedPhone
+            });
+        } else {
+            otpStorage.delete(formattedPhone);
+            return res.status(400).json({
+                success: false,
+                message: 'Failed to resend WhatsApp OTP.'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Meta WhatsApp Resend Error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to resend WhatsApp OTP.'
+        });
+    }
+});
+
+// =====================================================
 // 404 HANDLER
 // =====================================================
 
@@ -745,6 +1050,12 @@ app.listen(PORT, () => {
     console.log(`   POST /api/whatsapp/send-otp    - Send OTP via WhatsApp`);
     console.log(`   POST /api/whatsapp/verify-otp  - Verify WhatsApp OTP`);
     console.log(`   POST /api/whatsapp/resend-otp  - Resend WhatsApp OTP`);
+    console.log('=====================================================\n');
+    console.log('-----------------------------------------------------');
+    console.log('📱 Meta WhatsApp OTP Endpoints (Old Simple):');
+    console.log(`   POST /api/whatsapp-meta/send-otp    - Send OTP`);
+    console.log(`   POST /api/whatsapp-meta/verify-otp  - Verify OTP`);
+    console.log(`   POST /api/whatsapp-meta/resend-otp  - Resend OTP`);
     console.log('=====================================================\n');
 
 });
